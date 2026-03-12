@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  nats:
+    image: nats:alpine
+    container_name: homunculus_nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    networks:
+      - homunculus_net
+    restart: unless-stopped
+
+  memory-consolidation:
+    build: ./memory_consolidation
+    container_name: homunculus_memory
+    environment:
+      - NATS_URL=nats://nats:4222
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/firebase_key.json
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./memory_consolidation/firebase_key.json:/app/firebase_key.json:ro
+      - memory_data:/app/data
+    networks:
+      - homunculus_net
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+  decision-engine:
+    build: ./decision_engine
+    container_name: homunculus_decision
+    environment:
+      - NATS_URL=nats://nats:4222
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/firebase_key.json
+      - OLLAMA_HOST=http://ollama:11434
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./decision_engine/firebase_key.json:/app/firebase_key.json:ro
+    networks:
+      - homunculus_net
+    depends_on:
+      - nats
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: homunculus_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - homunculus_net
+    restart: unless-stopped
+
+  executor-service:
+    build: ./executor_service
+    container_name: homunculus_executor
+    environment:
+      - NATS_URL=nats://nats:4222
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/firebase_key.json
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./executor_service/firebase_key.json:/app/firebase_key.json:ro
+    networks:
+      - homunculus_net
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+networks:
+  homunculus_net:
+    driver: bridge
+
+volumes:
+  memory_data:
+  ollama_data:
